@@ -8,6 +8,9 @@ const renderer = new THREE.WebGLRenderer();
 renderer.setSize(window.innerWidth, window.innerHeight);
 document.body.appendChild(renderer.domElement);
 
+// Check if device is mobile
+const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+
 // Lighting
 const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
 scene.add(ambientLight);
@@ -40,7 +43,12 @@ const walls = [
 
 // Pointer Lock Controls
 const controls = new PointerLockControls(camera, document.body);
-document.body.addEventListener('click', () => controls.lock());
+
+// Modified click event for desktop to handle both desktop and mobile
+if (!isMobile) {
+  document.body.addEventListener('click', () => controls.lock());
+}
+
 scene.add(controls.getObject());
 camera.position.y = 1;
 
@@ -52,6 +60,8 @@ let velocity = new THREE.Vector3();
 let verticalVelocity = 0;
 let isGrounded = true;
 const keys = {};
+
+// Desktop keyboard controls
 document.addEventListener('keydown', (e) => {
   keys[e.code] = true;
   if (e.code === 'Space' && isGrounded) {
@@ -60,6 +70,127 @@ document.addEventListener('keydown', (e) => {
   }
 });
 document.addEventListener('keyup', (e) => keys[e.code] = false);
+
+// Mobile touch controls
+const joystickArea = document.getElementById('joystickArea');
+const shootBtn = document.getElementById('shootBtn');
+
+// Virtual joystick variables
+let joystickActive = false;
+let joystickOrigin = { x: 0, y: 0 };
+let joystickPosition = { x: 0, y: 0 };
+const joystickThumb = document.createElement('div');
+
+if (isMobile) {
+  // Create joystick thumb
+  joystickThumb.style.position = 'absolute';
+  joystickThumb.style.width = '40px';
+  joystickThumb.style.height = '40px';
+  joystickThumb.style.borderRadius = '50%';
+  joystickThumb.style.backgroundColor = 'rgba(255, 255, 255, 0.7)';
+  joystickThumb.style.top = '50%';
+  joystickThumb.style.left = '50%';
+  joystickThumb.style.transform = 'translate(-50%, -50%)';
+  joystickThumb.style.pointerEvents = 'none';
+  joystickArea.appendChild(joystickThumb);
+
+  // Touch events for joystick
+  joystickArea.addEventListener('touchstart', handleJoystickStart, false);
+  joystickArea.addEventListener('touchmove', handleJoystickMove, false);
+  joystickArea.addEventListener('touchend', handleJoystickEnd, false);
+
+  // Shoot button for mobile
+  shootBtn.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    shoot();
+    shootSound.play();
+  }, false);
+
+  // Setup device orientation for looking around
+  window.addEventListener('deviceorientation', handleOrientation, true);
+
+  // Prevent default touch actions on the canvas
+  renderer.domElement.addEventListener('touchstart', (e) => e.preventDefault(), { passive: false });
+  renderer.domElement.addEventListener('touchmove', (e) => e.preventDefault(), { passive: false });
+}
+
+// Handle joystick touch start
+function handleJoystickStart(e) {
+  e.preventDefault();
+  const touch = e.touches[0];
+  const rect = joystickArea.getBoundingClientRect();
+  joystickActive = true;
+  joystickOrigin = {
+    x: touch.clientX - rect.left,
+    y: touch.clientY - rect.top
+  };
+  joystickPosition = { ...joystickOrigin };
+  updateJoystickThumb();
+}
+
+// Handle joystick touch move
+function handleJoystickMove(e) {
+  e.preventDefault();
+  if (!joystickActive) return;
+  
+  const touch = e.touches[0];
+  const rect = joystickArea.getBoundingClientRect();
+  joystickPosition = {
+    x: touch.clientX - rect.left,
+    y: touch.clientY - rect.top
+  };
+  
+  // Calculate distance from center
+  const dx = joystickPosition.x - joystickOrigin.x;
+  const dy = joystickPosition.y - joystickOrigin.y;
+  const distance = Math.sqrt(dx * dx + dy * dy);
+  
+  // Limit distance to joystick radius
+  const maxRadius = 40;
+  if (distance > maxRadius) {
+    joystickPosition.x = joystickOrigin.x + dx * maxRadius / distance;
+    joystickPosition.y = joystickOrigin.y + dy * maxRadius / distance;
+  }
+  
+  updateJoystickThumb();
+}
+
+// Handle joystick touch end
+function handleJoystickEnd(e) {
+  e.preventDefault();
+  joystickActive = false;
+  joystickPosition = { ...joystickOrigin };
+  updateJoystickThumb();
+}
+
+// Update joystick thumb position
+function updateJoystickThumb() {
+  joystickThumb.style.left = `${joystickPosition.x}px`;
+  joystickThumb.style.top = `${joystickPosition.y}px`;
+}
+
+// Handle device orientation for mobile look controls
+let deviceOrientationControls = {
+  alpha: 0,
+  beta: 0,
+  gamma: 0,
+  initialized: false,
+  initialBeta: 0,
+  initialGamma: 0
+};
+
+function handleOrientation(e) {
+  if (!isMobile || !e.beta || !e.gamma) return;
+  
+  if (!deviceOrientationControls.initialized) {
+    deviceOrientationControls.initialized = true;
+    deviceOrientationControls.initialBeta = e.beta;
+    deviceOrientationControls.initialGamma = e.gamma;
+  }
+  
+  deviceOrientationControls.beta = e.beta - deviceOrientationControls.initialBeta;
+  deviceOrientationControls.gamma = e.gamma - deviceOrientationControls.initialGamma;
+}
 
 // Scoring System
 let score = 0;
@@ -137,13 +268,15 @@ function shoot() {
 const shootSound = new Audio('shoot.wav');
 const defeatSound = new Audio('defeat.wav');
 
-// Shooting Event
-document.addEventListener('mousedown', () => {
-  if (controls.isLocked) {
-    shoot();
-    shootSound.play();
-  }
-});
+// Desktop Shooting Event (Only for non-mobile)
+if (!isMobile) {
+  document.addEventListener('mousedown', () => {
+    if (controls.isLocked) {
+      shoot();
+      shootSound.play();
+    }
+  });
+}
 
 // Minimap
 const minimapCanvas = document.createElement('canvas');
@@ -159,15 +292,45 @@ const minimapCtx = minimapCanvas.getContext('2d');
 // Animation Loop
 function animate() {
   requestAnimationFrame(animate);
-
+  
   // Player Movement
   velocity.x = 0;
   velocity.z = 0;
+  
+  // Keyboard movement for desktop
   if (keys['KeyW']) velocity.z -= moveSpeed;
   if (keys['KeyS']) velocity.z += moveSpeed;
   if (keys['KeyA']) velocity.x -= moveSpeed;
   if (keys['KeyD']) velocity.x += moveSpeed;
-
+  
+  // Joystick movement for mobile
+  if (isMobile && joystickActive) {
+    const dx = joystickPosition.x - joystickOrigin.x;
+    const dy = joystickPosition.y - joystickOrigin.y;
+    
+    // Calculate normalized direction
+    const length = Math.sqrt(dx * dx + dy * dy);
+    if (length > 0) {
+      // Forward/backward movement (dy)
+      velocity.z = (dy / length) * moveSpeed;
+      
+      // Left/right movement (dx)
+      velocity.x = (dx / length) * moveSpeed;
+    }
+    
+    // Apply device orientation for looking around if initialized
+    if (deviceOrientationControls.initialized) {
+      // Use beta (up/down) and gamma (left/right) to rotate the camera
+      const rotationX = THREE.MathUtils.degToRad(deviceOrientationControls.gamma * 0.5);
+      const rotationY = THREE.MathUtils.degToRad(deviceOrientationControls.beta * 0.5);
+      
+      camera.rotation.y -= rotationX;
+      
+      // Limit vertical rotation to avoid flipping
+      camera.rotation.x = Math.max(-Math.PI/4, Math.min(Math.PI/4, camera.rotation.x - rotationY));
+    }
+  }
+  
   verticalVelocity -= gravity;
   controls.getObject().position.y += verticalVelocity;
   if (controls.getObject().position.y <= 1) {
@@ -177,7 +340,7 @@ function animate() {
   }
   controls.getObject().translateX(velocity.x);
   controls.getObject().translateZ(velocity.z);
-
+  
   // Update Bullets
   for (let bIndex = bullets.length - 1; bIndex >= 0; bIndex--) {
     const bullet = bullets[bIndex];
@@ -204,11 +367,11 @@ function animate() {
       bullets.splice(bIndex, 1);
     }
   }
-
+  
   // Update Enemies
   const playerPos = controls.getObject().position;
   enemies.forEach(enemy => enemy.update(playerPos));
-
+  
   // Draw Minimap
   minimapCtx.fillStyle = '#90EE90';
   minimapCtx.fillRect(0, 0, minimapCanvas.width, minimapCanvas.height);
@@ -220,7 +383,7 @@ function animate() {
     minimapCtx.fillStyle = `#${enemy.mesh.material.color.getHexString()}`;
     minimapCtx.fillRect(relativeX, relativeZ, 3, 3);
   });
-
+  
   renderer.render(scene, camera);
 }
 animate();

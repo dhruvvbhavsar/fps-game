@@ -7,9 +7,92 @@
     <style>
         body { margin: 0; }
         canvas { display: block; }
+        
+        /* Crosshair styles */
+        .crosshair {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 20px;
+            height: 20px;
+            pointer-events: none; /* Ensures crosshair doesn't interfere with clicks */
+            z-index: 999;
+        }
+        
+        .crosshair::before,
+        .crosshair::after {
+            content: "";
+            position: absolute;
+            background-color: white;
+        }
+        
+        .crosshair::before {
+            width: 2px;
+            height: 20px;
+            left: 9px;
+            top: 0;
+        }
+        
+        .crosshair::after {
+            width: 20px;
+            height: 2px;
+            left: 0;
+            top: 9px;
+        }
+
+        /* Mobile controls container */
+        .mobile-controls {
+            position: fixed;
+            bottom: 20px;
+            left: 0;
+            width: 100%;
+            display: none; /* Hidden by default, shown on mobile */
+            z-index: 1000;
+        }
+
+        @media (max-width: 768px) {
+            .mobile-controls {
+                display: flex;
+                justify-content: space-between;
+            }
+        }
+
+        /* Movement joystick area */
+        .joystick-area {
+            position: relative;
+            width: 120px;
+            height: 120px;
+            margin-left: 20px;
+            background-color: rgba(255, 255, 255, 0.2);
+            border-radius: 50%;
+        }
+
+        /* Shoot button */
+        .shoot-btn {
+            width: 80px;
+            height: 80px;
+            margin-right: 20px;
+            background-color: rgba(255, 0, 0, 0.5);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+        }
     </style>
 </head>
 <body>
+    <!-- Crosshair element -->
+    <div class="crosshair"></div>
+    
+    <!-- Mobile controls -->
+    <div class="mobile-controls">
+        <div class="joystick-area" id="joystickArea"></div>
+        <div class="shoot-btn" id="shootBtn">SHOOT</div>
+    </div>
+
     <!-- Load Three.js and PointerLockControls from jsDelivr -->
     <script type="importmap">
         {
